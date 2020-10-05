@@ -1,0 +1,17 @@
+{
+    "known_station":"",
+    "unknown_station":"",
+    "leak_simulator" : {
+        "enabled":false,
+        "method": "random_walk",
+        "random_walk":[{
+            "ID":"1",
+            "range" :[2,4],
+            "step":0.5
+        },{
+            "ID":"2",
+            "range" :[1,5],
+            "step":0.2
+        }]
+    }
+}
