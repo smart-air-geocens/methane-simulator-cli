@@ -1,0 +1,21 @@
+{
+    "post_rate": 2,
+    "sampling_rate":2,
+    "simulation_method": "IDW_planar",
+    "use_case" : "known_static", 
+    "STA":
+    {
+        "STA_endpoint": "https://ucalgary-sandbox-02.sensorup.com",
+        "user_name": "main",
+        "password": "bdbe16d7-f55e-520b-8c97-5354ec272aed"
+    }
+    ,
+    "wind":
+    {
+        "wind_activated": true,
+        "wind_direction": 0,
+        "wind_direction_UofM": "deg",
+        "wind_speed": 70,
+        "wind_speed_UofM": "km/h"
+    }
+}
