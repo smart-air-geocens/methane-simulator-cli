@@ -1,4 +1,4 @@
 {
-    "known_station": "leaking.json",
-    "unknown_station":"sensors.json"
+    "known_station": "data/leaking.json",
+    "unknown_station":"data/sensors.json"
 }

@@ -6,6 +6,7 @@ import schedule
 import time
 import datetime
 from random import randint
+import julian
 
 import src.IDW as IDW
 import src.make_STA_payload as make_STA_payload
@@ -13,6 +14,7 @@ import src.utils as utils
 import src.leak_simulator as ls
 import src.submit_results as submit_results
 import src.error_handler as error_handler
+import src.database as db
 
 # find matched time
 def find_matched_time(destination_list,time):
@@ -28,10 +30,10 @@ def init_static_sensors(leak_lists,trajectory_list):
     ID_index=0
     first_id=0
     leak_counter=0
+    counter=1
     sensor_lists=[]
     sensor_lists.append(trajectory_list[0])
     for leak_list in leak_lists:
-        sensor_list=[]
         if leak_counter==0:
             ID_index=leak_list.index('ID')
             leak_time_index=leak_list.index('Time')
@@ -39,18 +41,17 @@ def init_static_sensors(leak_lists,trajectory_list):
             first_id=leak_list[ID_index]
                           
         if leak_list[ID_index]==first_id:
-            traj_id_index=0
             traj_time_index=0
             traj_counter=0
             for row in trajectory_list:
-                sensor_list=row
                 if traj_counter==0:
                     traj_id_index=row.index('ID')
                     traj_time_index=row.index('Time')
-                else:
-                    sensor_list[traj_time_index]=leak_list[leak_time_index]
-                    sensor_lists.append(sensor_list)
+                else:                    
+                    sensor_lists.append([ leak_list[leak_time_index] if x==traj_time_index else row[x] for x in range(0, row.__len__()) ])
+                    counter+=1
                 traj_counter+=1
+                
                 
         leak_counter+=1
     return sensor_lists
@@ -119,17 +120,17 @@ is_random=False
 # TODO: set program to read use_case configs if we decide that file names and values are the same
 if use_case=='known_static':
     uc_configs=utils.read_json(os.path.join('data','known_static.json'))
-    known_file=uc_configs['known_station']
-    unknown_file=uc_configs['unknown_station']
+    known_file=os.path.join('',uc_configs['known_station'])
+    unknown_file=os.path.join('',uc_configs['unknown_station'])
 elif use_case=='random_static':
     uc_configs=utils.read_json(os.path.join('data','random_static.json'))
-    known_file=uc_configs['known_station']
-    unknown_file=uc_configs['unknown_station']
+    known_file=os.path.join('',uc_configs['known_station'])
+    unknown_file=os.path.join('',uc_configs['unknown_station'])
     is_random=True
 elif use_case=='known_trajectory':
     uc_configs=utils.read_json(os.path.join('data','known_trajectory.json'))
-    known_file=uc_configs['known_station']
-    unknown_file=uc_configs['trajectory']
+    known_file=os.path.join('',uc_configs['known_station'])
+    unknown_file=os.path.join('',uc_configs['trajectory'])
     is_trajectory=True
 else:
     print("Please determine a correct value for your use case")
@@ -172,6 +173,11 @@ id_leak=leak_lists[0].index('ID')
 knowns=[i[id_leak] for i in leak_lists]
 known_names=utils.unique(knowns[1:])
 
+# initialize local database
+(con,curs)=db.open_connection()
+db.init(con,curs)
+db.clear_cache(con,curs)
+
 # sort leak sources based on the time
 if not is_random:
     time_leak=leak_lists[0].index('Time')
@@ -187,12 +193,11 @@ if not is_random:
         # resampling data simulation
         if sample_rate>1:
             leak_lists=resample_data(leak_lists,time_leak,sample_rate)
-
+        
         # runs if the unknown stations are static
         if not bool(is_trajectory):
             print('init static sensors')
             trajectory_list=init_static_sensors(leak_lists,trajectory_list)
-
         # generate csv file rows
         print('calculating simulation values and formatting to STA readable payloads')
         for row in trajectory_list:
@@ -207,7 +212,6 @@ if not is_random:
             else:
                 inner_count=0
                 matched_rows=[]
-                
                 matched_rows=find_matched_time(leak_lists,row[origin_index])
                 for leak_list in matched_rows:
                     lat_index=leak_lists[0].index('Latitude')
@@ -220,7 +224,10 @@ if not is_random:
                 y=float(row[y_index])
                 ch4=IDW.run(x,y,x_block,y_block,methane_block,2,bool(wind_activated),wind_speed,wind_direction)
                 output_row={"ID":row[id_index],"time":row[origin_index],"ch4":ch4,"latitude":float(row[y_index]),"longitude":float(row[x_index])}
-
+                formated_time= (row[origin_index])[:-5].replace('T',' ')
+                formated_time=datetime.datetime.strptime(formated_time, '%Y-%m-%d %H:%M:%S')
+                jul_time=julian.to_jd(formated_time,fmt='jd')
+                db.insert_table(con,curs,output_row["ID"],output_row["ch4"],output_row["longitude"],output_row["latitude"],jul_time,"target")
                 message=make_STA_payload.get_STA_payload([output_row],simulation_method,known_names,bool(is_trajectory))
                 if output_row.__len__()>0:
                     output_rows.append(message)
@@ -270,6 +277,7 @@ else:
             iso_time=datetime.datetime.now().replace(microsecond=0).isoformat()
             iso_time=str(iso_time)+'.000Z'
             output_row={"ID":row[id_index],"time":iso_time,"ch4":ch4,"latitude":float(row[y_index]),"longitude":float(row[x_index])}
+            db.insert_table(con,curs,output_row["ID"],output_row["ch4"],output_row["longitude"],output_row["latitude"],output_row["time"],"target")
             message=make_STA_payload.get_STA_payload([output_row],simulation_method,known_names,bool(is_trajectory))
             if output_row.__len__()>0:
                 output_rows.append(message)
@@ -284,7 +292,7 @@ else:
             post_count+=uknown_stations.__len__()
         time.sleep(int(simulation_rate))
         output_rows.clear()
-            
+db.close_connection(con)
         
 
 

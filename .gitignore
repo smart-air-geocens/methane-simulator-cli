@@ -2,3 +2,4 @@ src/__pycache__
 data/leaking.json
 data/sensors.json
 data/trajectories3000.json
+local_cache.db
