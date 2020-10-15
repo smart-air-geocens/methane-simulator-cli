@@ -13,11 +13,17 @@ If you want to add wind direction and speed in your simulation conditions you ca
 ![Figure 1](images/wind.png)
 
 In Figure, blie circle is the target station that we are going to simulate methane values for it based on distance to four leaking sources and wind direction. The red arrow is the wind direction, green arrow is the direction from leaking source 1 to the target station, blue arrow is the north direction, and orange arrow is the projection of wind on green arrow. The `a` is the azimuth of green arrow direction, `b` is azimuth of wind and `c` is the angle between leaking source-target direction and wind direction. To interpolate methane values when there is not any wind, we only consider distance between target and leaking sources. When we add wind, we have to apply wind direction and speed into interpolation values. The following steps should be taken to calcualte final target values.
+
 1- Calculate angle between wind and leak-target direction
+
 2- Eliminate leaking sources which have angel more than 180 degree with wind.
+
 3- Run interpolation based on distance between leaking sources and the target.
+
 4- Calculate projection of wind speed on leak-target directions
+
 5- Run interpolation based on projected wind speed values
+
 6- Averaging of the step 3 and step 5 results will give the final interpolated value for target station.
 
 ## Installing Requirements
