@@ -7,6 +7,7 @@ import time
 import datetime
 from random import randint
 import julian
+import math
 
 import src.IDW as IDW
 import src.make_STA_payload as make_STA_payload
@@ -94,7 +95,9 @@ def get_matrix_geojson(path):
             values.append(longitude)
             values.append(latitude)
             output_matrix.append(values)
-    return output_matrix       
+    return output_matrix  
+
+         
                 
 known_file=''
 unknown_file=''
@@ -182,6 +185,7 @@ db.clear_cache(con,curs)
 if not is_random:
     time_leak=leak_lists[0].index('Time')
     meth_index=leak_lists[0].index('CH4')
+    leak_id=leak_lists[0].index('ID')
     if not (((leak_lists[1][meth_index] is None) or (leak_lists[1][meth_index]=='')) and ((leak_lists[1][time_leak] is None) or (leak_lists[1][time_leak]==''))):
         print('sorting methane records...')
         sorted_lists = sorted(leak_lists[1:], key=lambda x: x[time_leak])
@@ -203,6 +207,7 @@ if not is_random:
         for row in trajectory_list:
             x_block=[]
             y_block=[]
+            id_block=[]
             methane_block=[]
             if count==0:
                 id_index=row.index('ID')
@@ -218,20 +223,27 @@ if not is_random:
                     long_index=leak_lists[0].index('Longitude')
                     x_block.append(float(leak_list[long_index]))
                     y_block.append(float(leak_list[lat_index]))
+                    id_block.append(leak_list[leak_id])
                     methane_block.append(float(leak_list[meth_index]))
+                    formated_time= (row[origin_index])[:-5].replace('T',' ')
+                    formated_time=datetime.datetime.strptime(formated_time, '%Y-%m-%d %H:%M:%S')
+                    jul_time=julian.to_jd(formated_time,fmt='jd')
+                    db.insert_table(con,curs,leak_list[leak_id],leak_list[meth_index],leak_list[long_index],leak_list[lat_index],jul_time,"leaking")
                     inner_count+=1
                 x=float(row[x_index])
                 y=float(row[y_index])
-                ch4=IDW.run(x,y,x_block,y_block,methane_block,2,bool(wind_activated),wind_speed,wind_direction)
-                output_row={"ID":row[id_index],"time":row[origin_index],"ch4":ch4,"latitude":float(row[y_index]),"longitude":float(row[x_index])}
                 formated_time= (row[origin_index])[:-5].replace('T',' ')
                 formated_time=datetime.datetime.strptime(formated_time, '%Y-%m-%d %H:%M:%S')
                 jul_time=julian.to_jd(formated_time,fmt='jd')
+                if bool(wind_activated):
+                    IDW.get_db_config(db,con,curs)
+                ch4=IDW.run(x,y,x_block,y_block,methane_block,2,bool(wind_activated),wind_speed,wind_direction,float(jul_time),id_block)
+                output_row={"ID":row[id_index],"time":row[origin_index],"ch4":ch4,"latitude":float(row[y_index]),"longitude":float(row[x_index])}
                 db.insert_table(con,curs,output_row["ID"],output_row["ch4"],output_row["longitude"],output_row["latitude"],jul_time,"target")
                 message=make_STA_payload.get_STA_payload([output_row],simulation_method,known_names,bool(is_trajectory))
                 if output_row.__len__()>0:
                     output_rows.append(message)
-               
+                    print(output_row)
             count+=1
         print('start posting with '+str(simulation_rate)+' seconds time intervals.')
         post_count=0
@@ -244,6 +256,7 @@ if not is_random:
                 post_count+=uknown_stations.__len__()
             time.sleep(int(simulation_rate))
 else:
+    leak_id=leak_lists[0].index('ID')
     leak_configs=uc_configs['leak_simulator']
     x_block=[]
     y_block=[]
@@ -255,7 +268,10 @@ else:
         for row in trajectory_list[1:]:
             x_block=[]
             y_block=[]
+            id_block=[]
             methane_block=[]
+            iso_time=datetime.datetime.now().replace(microsecond=0).isoformat()
+            iso_time=str(iso_time)+'.000Z'
             for leak_list in leak_lists[1:]:
                 if leak_configs['method']=='random_walk':
                     conf_indx=utils.get_json_index(leak_configs['random_walk'],'ID',leak_list[id_leak])
@@ -270,12 +286,19 @@ else:
                 long_index=leak_lists[0].index('Longitude')
                 x_block.append(float(leak_list[long_index]))
                 y_block.append(float(leak_list[lat_index]))
+                id_block.append(float(leak_list[leak_id]))
                 methane_block.append(sim_value)
+                formated_time= (iso_time)[:-5].replace('T',' ')
+                formated_time=datetime.datetime.strptime(formated_time, '%Y-%m-%d %H:%M:%S')
+                jul_time=julian.to_jd(formated_time,fmt='jd')
+                db.insert_table(con,curs,leak_list[leak_id],leak_list[meth_index],leak_list[long_index],leak_list[lat_index],jul_time,"leaking")
+                    
             x=float(row[x_index])
             y=float(row[y_index])
-            ch4=IDW.run(x,y,x_block,y_block,methane_block,2,bool(wind_activated),wind_speed,wind_direction)
-            iso_time=datetime.datetime.now().replace(microsecond=0).isoformat()
-            iso_time=str(iso_time)+'.000Z'
+            formated_time= (iso_time)[:-5].replace('T',' ')
+            formated_time=datetime.datetime.strptime(formated_time, '%Y-%m-%d %H:%M:%S')
+            jul_time=julian.to_jd(formated_time,fmt='jd')
+            ch4=IDW.run(x,y,x_block,y_block,methane_block,2,bool(wind_activated),wind_speed,wind_direction,float(jul_time),id_block)
             output_row={"ID":row[id_index],"time":iso_time,"ch4":ch4,"latitude":float(row[y_index]),"longitude":float(row[x_index])}
             db.insert_table(con,curs,output_row["ID"],output_row["ch4"],output_row["longitude"],output_row["latitude"],output_row["time"],"target")
             message=make_STA_payload.get_STA_payload([output_row],simulation_method,known_names,bool(is_trajectory))

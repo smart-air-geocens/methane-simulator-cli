@@ -31,9 +31,9 @@ def insert_table(con,cursor,id,ch4,lon,lat,time,name):
     con.commit()
     
 # Select to the table
-def select_table(cursor,time,name):
+def select_table(cursor,time,ID,name):
     t = (time,)
-    cursor.execute('SELECT * FROM '+name+' WHERE time>?', t)
+    cursor.execute('SELECT * FROM '+name+' WHERE time>=? and id="'+ID+'" ORDER BY time ASC LIMIT 1', t)
     return cursor.fetchone()
 
 # Close the connection
