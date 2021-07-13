@@ -1,6 +1,7 @@
 from math import radians, cos, sin, asin, sqrt, pow, atan
 import utm
 
+db_configs=()
 # WGS84 distance function
 def distance(lat1, lat2, lon1, lon2):      
     # The math module contains a function named 
@@ -45,9 +46,21 @@ def get_angle(azimuth_known_station, azimuth_unknown_station):
         alpha = 360 - abs(azimuth_unknown_station - azimuth_known_station)
     return alpha
 
+# get leak in target when it is windy
+def get_leak_in_target(db,con,cur,ID,target_time,wind_speed,dist):
+    t_leak=target_time-dist/wind_speed
+    c_leak=db.select_table(cur,t_leak,ID,'leaking')
+    if c_leak is not None:
+        return c_leak[1]
+    else:
+        return None
 
+def get_db_config(db,con,cur):
+    global db_configs
+    db_configs=(db,con,cur)
+        
 # IDW
-def run(x,y,x_block,y_block,z_block,p,wind_enabled,wind_speed,wind_direction):
+def run(x,y,x_block,y_block,z_block,p,wind_enabled,wind_speed,wind_direction,time,ID):
     inter_value=0
     inverse_distance=0
     Z_value=0
@@ -80,9 +93,13 @@ def run(x,y,x_block,y_block,z_block,p,wind_enabled,wind_speed,wind_direction):
                 parameter=abs(Ys-Y)/abs(Xs-X)
             # the first condition 
             if alpha<180:
+                (db,con,cur)=db_configs
+                z=get_leak_in_target(db,con,cur,ID[i],time,wind_speed,dist)
+                if z is None:
+                    z=0
                 dist=dist/parameter
                 inverse_distance+= 1/(pow(dist,p))
-                Z_value+= z_block[i]/(pow(dist,p))
+                Z_value+= z/(pow(dist,p))
                 total_speed+=projected_wind
                 total_speed_imact+=projected_wind*z_block[i]
                                  
